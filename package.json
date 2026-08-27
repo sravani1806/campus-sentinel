@@ -1,0 +1,28 @@
+{
+  "name": "campus-sentinel-ecosystem",
+  "version": "1.0.0",
+  "description": "Campus Sentinel: Agentic AI Smart Campus Emergency Early-Warning & Autonomous Evacuation System",
+  "private": true,
+  "scripts": {
+    "start": "npm run start:frontend",
+    "start:all": "powershell -ExecutionPolicy Bypass -File .\\start-all.ps1",
+    "start:ai": "cd ai-service && .\\venv\\Scripts\\uvicorn main:app --host 127.0.0.1 --port 8000 --reload",
+    "start:ai-service": "cd ai-service && .\\venv\\Scripts\\uvicorn main:app --host 127.0.0.1 --port 8000 --reload",
+    "start:backend": "cd backend && npm run dev",
+    "start:frontend": "cd frontend && npm run dev",
+    "install:all": "npm --prefix backend install && npm --prefix frontend install"
+  },
+  "keywords": [
+    "agentic-ai",
+    "langgraph",
+    "ollama",
+    "yolov11",
+    "networkx",
+    "a-star-pathfinding",
+    "emergency-evacuation",
+    "digital-twin",
+    "pwa"
+  ],
+  "author": "Campus Sentinel Team",
+  "license": "MIT"
+}
