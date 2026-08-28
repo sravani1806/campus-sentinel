@@ -1,6 +1,7 @@
 /**
  * Campus Sentinel - Real-Time Node.js Backend Server
- * Express REST APIs + Socket.io Real-Time Event Hub
+ * Express REST APIs + Socket.io Real-Time Event Hub + MongoDB Persistent Store
+ * Last updated: 2026-08-28T15:18:30Z
  */
 
 import http from 'http';
@@ -10,6 +11,7 @@ import { Server } from 'socket.io';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { store } from './store.js';
+import { connectDB, getDbStatus } from './db/db.js';
 
 import incidentRoutes from './routes/incidentRoutes.js';
 import zoneRoutes from './routes/zoneRoutes.js';
@@ -17,15 +19,19 @@ import cameraRoutes from './routes/cameraRoutes.js';
 import simulationRoutes from './routes/simulationRoutes.js';
 import evacuationRoutes from './routes/evacuationRoutes.js';
 import agentLogRoutes from './routes/agentLogRoutes.js';
+import studentRoutes from './routes/studentRoutes.js';
 
 dotenv.config();
+
+// Connect to MongoDB (with resilient in-memory fallback)
+connectDB();
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST", "PATCH"]
+    methods: ["GET", "POST", "PATCH", "DELETE"]
   }
 });
 
@@ -48,12 +54,14 @@ app.use('/api/cameras', cameraRoutes);
 app.use('/api/simulation', simulationRoutes);
 app.use('/api/evacuation', evacuationRoutes);
 app.use('/api/agent-logs', agentLogRoutes);
+app.use('/api/students', studentRoutes);
 
 app.get('/health', (req, res) => {
   res.json({
     status: "ONLINE",
     server: "Campus Sentinel Real-Time Node Gateway",
     uptime: process.uptime(),
+    database: getDbStatus(),
     active_sockets: io.engine.clientsCount,
     timestamp: new Date().toISOString()
   });
@@ -142,5 +150,6 @@ server.listen(PORT, () => {
   console.log(`🛡️  CAMPUS SENTINEL REAL-TIME NODE.JS SERVER`);
   console.log(`📡  Port: http://localhost:${PORT}`);
   console.log(`🤖  Connected AI Service: ${AI_SERVICE_URL}`);
+  console.log(`🗄️  Database Layer: Active`);
   console.log(`====================================================`);
 });

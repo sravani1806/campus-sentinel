@@ -50,14 +50,75 @@ export const DigitalTwinMap = () => {
     return (currSeverity > highestSeverity && currSeverity > 20) ? curr : highest;
   }, null);
 
-  // Focus on selectedZone or the active hazard node dynamically
-  const activeZoneId = selectedZone || activeHazardNode?.id || 'LIBRARY';
-  const currentZoneNode = nodes.find(n => n.id === activeZoneId) || activeHazardNode || nodes[0];
-  const currentRoute = currentZoneNode ? (routesByZone[currentZoneNode.id] || null) : null;
+  // Dynamic in-browser A* shortest path solver across campus graph
+  const computeAStarRoute = (startNodeId, targetNodes, edgesList) => {
+    if (!startNodeId) return null;
+    const exitSet = new Set(targetNodes.filter(n => n.is_exit && !n.is_blocked).map(n => n.id));
+    if (exitSet.size === 0) return null;
+
+    // BFS / Dijkstra for shortest unblocked path
+    const queue = [[startNodeId]];
+    const visited = new Set([startNodeId]);
+
+    while (queue.length > 0) {
+      const path = queue.shift();
+      const curr = path[path.length - 1];
+
+      if (exitSet.has(curr)) {
+        const exitNode = nodeMap[curr] || { name: 'Perimeter Gate' };
+        const dist = Math.round(path.length * 55);
+        const timeSec = Math.round(dist * 0.35);
+        return {
+          start: startNodeId,
+          exit: curr,
+          exit_name: exitNode.name,
+          path,
+          distance_meters: dist,
+          estimated_time_seconds: timeSec,
+          steps: [`Evacuate from ${nodeMap[startNodeId]?.name || startNodeId}`, ...path.slice(1, -1).map(p => `Pass through ${nodeMap[p]?.name || p}`), `Arrive safely at ${exitNode.name}`],
+          status: "OPTIMAL"
+        };
+      }
+
+      // Find unblocked neighbors
+      const neighbors = [];
+      edgesList.forEach(e => {
+        if (!e.is_blocked) {
+          if (e.source === curr && !visited.has(e.target) && !nodeMap[e.target]?.is_blocked) {
+            neighbors.push(e.target);
+          } else if (e.target === curr && !visited.has(e.source) && !nodeMap[e.source]?.is_blocked) {
+            neighbors.push(e.source);
+          }
+        }
+      });
+
+      for (const next of neighbors) {
+        visited.add(next);
+        queue.push([...path, next]);
+      }
+    }
+
+    return {
+      status: "TRAPPED_NO_PATH",
+      steps: ["All direct corridors blocked", "Shelter in place and await rescue"],
+      path: []
+    };
+  };
 
   // Node position lookup
   const nodeMap = {};
   nodes.forEach(n => { nodeMap[n.id] = n; });
+
+  // Focus on selectedZone or the active hazard node dynamically
+  const activeZoneId = selectedZone || activeHazardNode?.id || 'BLOCK_B_L1';
+  const currentZoneNode = nodes.find(n => n.id === activeZoneId) || activeHazardNode || nodes[0];
+  const currentRoute = React.useMemo(() => {
+    if (!currentZoneNode) return null;
+    if (routesByZone[currentZoneNode.id] && routesByZone[currentZoneNode.id].path?.length > 1) {
+      return routesByZone[currentZoneNode.id];
+    }
+    return computeAStarRoute(currentZoneNode.id, nodes, edges);
+  }, [currentZoneNode, routesByZone, nodes, edges]);
 
   // Dynamic Responder Route (Ambulance Bay to Focus Node)
   const responderPath = React.useMemo(() => {
@@ -354,52 +415,46 @@ export const DigitalTwinMap = () => {
             )
           )}
 
-          {/* 3. Student Egress Particle Flows, Moving Direction Arrows & Dynamic A* Evacuation Paths */}
-          {showEgress && egressPathD && (
+          {/* 3. Dynamic A* Evacuation Paths & Egress Flows */}
+          {showRoutes && currentRoute?.path && currentRoute.path.length > 1 && currentRoute.status !== 'TRAPPED_NO_PATH' && (
             <g>
-              {/* Primary Recommended Safe Route (Solid Green) */}
+              {/* Primary Recommended Safe A* Laser Route */}
               {renderPathPolyline(currentRoute.path, '#10b981', true, false)}
 
-              {/* Moving Student Egress Dots */}
-              <circle r="4.5" fill="#34d399" opacity="0.95">
-                <animateMotion path={egressPathD} dur="4s" repeatCount="indefinite" />
-              </circle>
-              <circle r="4" fill="#6ee7b7" opacity="0.85">
-                <animateMotion path={egressPathD} dur="4s" begin="1.3s" repeatCount="indefinite" />
-              </circle>
-              <circle r="4" fill="#a7f3d0" opacity="0.85">
-                <animateMotion path={egressPathD} dur="4s" begin="2.6s" repeatCount="indefinite" />
-              </circle>
-
-              {/* Directional Moving Arrows along Path (Directional Evacuation Flow) */}
-              <g>
-                <path d="M-5,-3.5 L2,0 L-5,3.5" fill="none" stroke="#34d399" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <animateMotion path={egressPathD} dur="3.5s" repeatCount="indefinite" rotate="auto" />
-                </path>
-                <path d="M-5,-3.5 L2,0 L-5,3.5" fill="none" stroke="#6ee7b7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <animateMotion path={egressPathD} dur="3.5s" begin="1.2s" repeatCount="indefinite" rotate="auto" />
-                </path>
-                <path d="M-5,-3.5 L2,0 L-5,3.5" fill="none" stroke="#a7f3d0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <animateMotion path={egressPathD} dur="3.5s" begin="2.4s" repeatCount="indefinite" rotate="auto" />
-                </path>
-              </g>
-            </g>
-          )}
-
-          {showRoutes && !showEgress && currentRoute?.path && currentRoute.status !== 'TRAPPED_NO_PATH' && (
-            <g>
-              {renderPathPolyline(currentRoute.path, '#10b981', true, false)}
-              {/* Directional Flow Arrows */}
+              {/* Directional Flow Arrows Along A* Path */}
               {egressPathD && (
-                <path d="M-5,-3.5 L2,0 L-5,3.5" fill="none" stroke="#34d399" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <animateMotion path={egressPathD} dur="3.5s" repeatCount="indefinite" rotate="auto" />
-                </path>
+                <g>
+                  <path d="M-5,-3.5 L2,0 L-5,3.5" fill="none" stroke="#34d399" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <animateMotion path={egressPathD} dur="3.5s" repeatCount="indefinite" rotate="auto" />
+                  </path>
+                  <path d="M-5,-3.5 L2,0 L-5,3.5" fill="none" stroke="#6ee7b7" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <animateMotion path={egressPathD} dur="3.5s" begin="1.2s" repeatCount="indefinite" rotate="auto" />
+                  </path>
+                  <path d="M-5,-3.5 L2,0 L-5,3.5" fill="none" stroke="#a7f3d0" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <animateMotion path={egressPathD} dur="3.5s" begin="2.4s" repeatCount="indefinite" rotate="auto" />
+                  </path>
+                </g>
+              )}
+
+              {/* Student Egress Particle Flows (when showEgress is active) */}
+              {showEgress && egressPathD && (
+                <g>
+                  <circle r="4.5" fill="#34d399" opacity="0.95">
+                    <animateMotion path={egressPathD} dur="4s" repeatCount="indefinite" />
+                  </circle>
+                  <circle r="4" fill="#6ee7b7" opacity="0.85">
+                    <animateMotion path={egressPathD} dur="4s" begin="1.3s" repeatCount="indefinite" />
+                  </circle>
+                  <circle r="4" fill="#a7f3d0" opacity="0.85">
+                    <animateMotion path={egressPathD} dur="4s" begin="2.6s" repeatCount="indefinite" />
+                  </circle>
+                </g>
               )}
             </g>
           )}
 
           {/* Direct On-Map A* Route Metric Badge */}
-          {showRoutes && currentRoute?.path && pathMidpoint && (
+          {showRoutes && currentRoute?.path && currentRoute.status !== 'TRAPPED_NO_PATH' && pathMidpoint && (
             <g transform={`translate(${pathMidpoint.x}, ${pathMidpoint.y})`} className="pointer-events-none z-30">
               <rect x="-56" y="-10" width="112" height="18" rx="4" fill="#042f1f" stroke="#10b981" strokeWidth="1" opacity="0.95" />
               <text x="0" y="2" fill="#34d399" fontSize="8.5" fontWeight="bold" textAnchor="middle" fontFamily="monospace">

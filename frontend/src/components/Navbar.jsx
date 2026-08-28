@@ -8,7 +8,8 @@ import {
   BarChart3, 
   AlertTriangle,
   PlaySquare,
-  Clock
+  Clock,
+  Users
 } from 'lucide-react';
 import { useSentinel } from '../context/SentinelContext';
 
@@ -16,7 +17,8 @@ export const Navbar = ({ activeTab, setActiveTab }) => {
   const { 
     telemetry, 
     isAudioMuted, 
-    setIsAudioMuted 
+    setIsAudioMuted,
+    studentSummary 
   } = useSentinel();
   const [timeStr, setTimeStr] = useState('');
 
@@ -73,13 +75,10 @@ export const Navbar = ({ activeTab, setActiveTab }) => {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-base tracking-wider text-white">CAMPUS</span>
-                <span className="font-extrabold text-base tracking-wider text-blue-400">SENTINEL</span>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 font-bold">Control Center</span>
+                <span className="font-extrabold text-base tracking-wider text-cyan-400">SENTINEL</span>
               </div>
-              <p className="text-[10.5px] text-slate-400 font-mono tracking-tight flex items-center gap-2">
-                <span>Autonomous Evacuation Twin</span>
-                <span className="text-slate-600">•</span>
-                <span className="text-slate-400">Emergency Operations</span>
+              <p className="text-[10px] text-cyan-300/80 font-mono tracking-wider">
+                Emergency Evacuation Twin
               </p>
             </div>
           </div>

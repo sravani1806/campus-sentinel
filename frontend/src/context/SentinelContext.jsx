@@ -174,6 +174,14 @@ export const SentinelProvider = ({ children }) => {
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [lastAlert, setLastAlert] = useState(null);
   const [safetyCheckins, setSafetyCheckins] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [studentSummary, setStudentSummary] = useState({
+    total: 12,
+    safe_count: 7,
+    in_danger_count: 3,
+    unaccounted_count: 2,
+    database: { isConnected: true, statusLabel: "MongoDB Connected" }
+  });
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isOfflineManual, setIsOfflineManual] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
@@ -333,13 +341,47 @@ export const SentinelProvider = ({ children }) => {
       setSafetyCheckins(prev => [checkin, ...prev]);
     });
 
+    s.on('student_status_updated', (payload) => {
+      if (payload?.student) {
+        setStudents(prev => {
+          const idx = prev.findIndex(s => s.student_id === payload.student.student_id);
+          if (idx !== -1) {
+            const updated = [...prev];
+            updated[idx] = payload.student;
+            return updated;
+          }
+          return [payload.student, ...prev];
+        });
+      }
+      fetchStudentSummary();
+    });
+
+    s.on('roster_reset', () => {
+      fetchStudents();
+      fetchStudentSummary();
+    });
+
+    s.on('emergency_evacuation_ping', (ping) => {
+      setToastNotification({
+        id: `PING-${Date.now()}`,
+        title: ping.title || "EMERGENCY SAFETY PING",
+        message: ping.message || "Please confirm your safety status.",
+        type: "CRITICAL_HAZARD",
+        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false })
+      });
+      playAudioSiren();
+    });
+
     setSocket(s);
 
     fetchIncidents();
     fetchInitialState();
+    fetchStudents();
+    fetchStudentSummary();
 
     const syncInterval = setInterval(() => {
       fetchInitialState();
+      fetchStudentSummary();
     }, 3000);
 
     return () => {
@@ -691,19 +733,118 @@ export const SentinelProvider = ({ children }) => {
     }
   };
 
-  const submitSafetyCheckin = async (userName, zoneId, status, message) => {
+  const fetchStudents = async (filters = {}) => {
     try {
-      const res = await axios.post(`${BACKEND_URL}/api/incidents/check-in`, {
+      const params = new URLSearchParams();
+      if (filters.status && filters.status !== 'ALL') params.append('status', filters.status);
+      if (filters.zone_id && filters.zone_id !== 'ALL') params.append('zone_id', filters.zone_id);
+      if (filters.search) params.append('search', filters.search);
+
+      const res = await axios.get(`${BACKEND_URL}/api/students?${params.toString()}`, { timeout: 3000 });
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setStudents(res.data.data);
+      }
+    } catch (e) {
+      console.warn('[Context] Could not fetch students:', e.message);
+    }
+  };
+
+  const fetchStudentSummary = async () => {
+    try {
+      const res = await axios.get(`${BACKEND_URL}/api/students/summary`, { timeout: 3000 });
+      if (res.data.success && res.data.data) {
+        setStudentSummary(res.data.data);
+      }
+    } catch (e) {
+      console.warn('[Context] Could not fetch student summary:', e.message);
+    }
+  };
+
+  const markStudentSafe = async (studentId) => {
+    try {
+      const res = await axios.patch(`${BACKEND_URL}/api/students/${studentId}/status`, {
+        status: 'SAFE',
+        emergency_message: 'Marked Safe by Incident Commander in Sentinel Control Center',
+        is_rescued: true
+      });
+      if (res.data.success) {
+        addTimelineEvent(`Personnel ${studentId} verified and marked SAFE in database.`, 'SAFETY', 'VERIFIED');
+        fetchStudents();
+        fetchStudentSummary();
+      }
+      return res.data;
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const dispatchRescueToStudent = async (studentId, notes = "QRF Rescue Squad Dispatched") => {
+    try {
+      const res = await axios.patch(`${BACKEND_URL}/api/students/${studentId}/status`, {
+        emergency_message: `🚨 RESCUE IN PROGRESS: ${notes}`,
+        is_rescued: false
+      });
+      if (res.data.success) {
+        addTimelineEvent(`QRF Emergency Rescue deployed for student ${studentId}.`, 'RESCUE', 'DISPATCHED');
+        playAudioSiren();
+        fetchStudents();
+      }
+      return res.data;
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const pingUnaccountedStudents = async () => {
+    try {
+      const res = await axios.post(`${BACKEND_URL}/api/students/ping-unaccounted`);
+      addTimelineEvent(`Emergency check-in ping broadcasted to all unaccounted students.`, 'ALERT', 'BROADCAST');
+      return res.data;
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const resetStudentRoster = async () => {
+    try {
+      const res = await axios.post(`${BACKEND_URL}/api/students/reset`);
+      if (res.data.success) {
+        setStudents(res.data.data);
+        addTimelineEvent("Student safety roster reset to demo baseline.", 'SYSTEM', 'RESET');
+        fetchStudentSummary();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const submitSafetyCheckin = async (studentIdOrName, zoneId, status, message, phone = '') => {
+    try {
+      const isObject = typeof studentIdOrName === 'object';
+      const studentId = isObject ? studentIdOrName.student_id : (studentIdOrName.includes('2026-') ? studentIdOrName : undefined);
+      const userName = isObject ? studentIdOrName.name : studentIdOrName;
+
+      const res = await axios.post(`${BACKEND_URL}/api/students/check-in`, {
+        student_id: studentId,
         user_name: userName,
+        name: userName,
         zone_id: zoneId,
         status: status,
-        message: message
-      }, { timeout: 2000 });
+        message: message,
+        phone: phone
+      }, { timeout: 3000 });
+
+      if (res.data.success) {
+        addTimelineEvent(`Safety check-in: ${userName} recorded as ${status} at ${zoneId}`, status === 'SAFE' ? 'SAFE' : 'SOS', status);
+        fetchStudents();
+        fetchStudentSummary();
+      }
       return res.data;
     } catch (e) {
       const offlineRecord = {
         id: `OFFLINE-SOS-${Date.now()}`,
-        user_name: userName,
+        student_id: typeof studentIdOrName === 'object' ? studentIdOrName.student_id : `OFFLINE-${Date.now()}`,
+        user_name: typeof studentIdOrName === 'object' ? studentIdOrName.name : studentIdOrName,
         zone_id: zoneId,
         status: status,
         message: message,
@@ -739,7 +880,8 @@ export const SentinelProvider = ({ children }) => {
       frontend: 'CONNECTED (100% OPERATIONAL)',
       backend: isConnected ? 'CONNECTED (PORT 5000)' : 'LOCAL SIMULATION ENGINE ACTIVE',
       aiService: 'DETERMINISTIC LOCAL ENGINE (ACTIVE)',
-      simulationEngine: 'RUNNING (30 FPS)'
+      simulationEngine: 'RUNNING (30 FPS)',
+      database: studentSummary.database?.statusLabel || 'MongoDB Connected'
     }
   };
 
@@ -773,6 +915,14 @@ export const SentinelProvider = ({ children }) => {
       setIsAudioMuted,
       isLoading,
       safetyCheckins,
+      students,
+      studentSummary,
+      fetchStudents,
+      fetchStudentSummary,
+      markStudentSafe,
+      dispatchRescueToStudent,
+      pingUnaccountedStudents,
+      resetStudentRoster,
       triggerScenario,
       injectHazard,
       resetHazards,

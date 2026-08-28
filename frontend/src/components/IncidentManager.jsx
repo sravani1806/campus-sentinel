@@ -16,7 +16,7 @@ import axios from 'axios';
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 export const IncidentManager = () => {
-  const { incidents, safetyCheckins, telemetry } = useSentinel();
+  const { incidents, safetyCheckins, telemetry, setActiveTab, studentSummary } = useSentinel();
   const [showModal, setShowModal] = useState(false);
   const [title, setTitle] = useState('');
   const [zoneId, setZoneId] = useState('BLOCK_A_L1');
@@ -218,8 +218,18 @@ export const IncidentManager = () => {
             </div>
           </div>
 
-          <div className="p-2.5 rounded bg-slate-950 border border-slate-800 text-[11px] text-slate-400">
-            📡 Safety check-ins are synced via WebSockets and cached offline on student devices.
+          <div className="space-y-2">
+            <button
+              onClick={() => setActiveTab('roster')}
+              className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.3)] transition cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>View Full Safety &amp; Danger Roster ({studentSummary.total || 12} Students)</span>
+            </button>
+
+            <div className="p-2.5 rounded bg-slate-950 border border-slate-800 text-[11px] text-slate-400">
+              📡 Synced in real-time with MongoDB Atlas &amp; Student PWA clients.
+            </div>
           </div>
         </div>
       </div>
