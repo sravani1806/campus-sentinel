@@ -35,6 +35,9 @@ import axios from 'axios';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
+axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
+axios.defaults.headers.common['Bypass-Tunnel-Reminder'] = 'true';
+
 export const StudentPWA = () => {
   const { 
     telemetry, 

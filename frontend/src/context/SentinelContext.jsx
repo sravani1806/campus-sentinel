@@ -6,6 +6,10 @@ const SentinelContext = createContext(null);
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
+// Ensure Localtunnel doesn't block automated API check-ins
+axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
+axios.defaults.headers.common['Bypass-Tunnel-Reminder'] = 'true';
+
 const DEFAULT_CAMPUS_STATE = {
   cycle_id: 1,
   cycle_duration_ms: 12.5,
