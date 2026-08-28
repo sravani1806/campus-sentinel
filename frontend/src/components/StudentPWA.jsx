@@ -33,7 +33,7 @@ import {
 import { useSentinel } from '../context/SentinelContext';
 import axios from 'axios';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://campus-sentinel-backend.onrender.com';
 
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
 axios.defaults.headers.common['Bypass-Tunnel-Reminder'] = 'true';

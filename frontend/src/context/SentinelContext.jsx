@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const SentinelContext = createContext(null);
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://campus-sentinel-backend.onrender.com';
 
 // Ensure Localtunnel doesn't block automated API check-ins
 axios.defaults.headers.common['bypass-tunnel-reminder'] = 'true';
